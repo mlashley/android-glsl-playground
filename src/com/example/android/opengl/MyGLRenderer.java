@@ -44,12 +44,17 @@ public class MyGLRenderer implements GLSurfaceView.Renderer {
 
     // Declare as volatile because we are updating it from another thread
     public volatile float mAngle;
-
+    public boolean drawTriangle;
+    
     @Override
     public void onSurfaceCreated(GL10 unused, EGLConfig config) {
 
         // Set the background frame color
         GLES20.glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        
+        // Enable Alpha/Blending (see also setEGLConfigChooser on the GLSurfaceView
+        GLES20.glEnable(GLES20.GL_BLEND);
+        GLES20.glBlendFunc(GLES20.GL_ONE, GLES20.GL_ONE_MINUS_SRC_ALPHA);
 
         mTriangle = new Triangle();
         mSquare   = new Square();
@@ -77,14 +82,15 @@ public class MyGLRenderer implements GLSurfaceView.Renderer {
 //        long time = SystemClock.uptimeMillis() % 4000L;
 //        float angle = 0.090f * ((int) time);
         
-        
-        //Matrix.setRotateM(mRotationMatrix, 0, mAngle, 0, 0, -1.0f);
+        if(drawTriangle) {
+        	Matrix.setRotateM(mRotationMatrix, 0, mAngle, 0, 0, -1.0f);
 
-        // Combine the rotation matrix with the projection and camera view
-        //Matrix.multiplyMM(mMVPMatrix, 0, mRotationMatrix, 0, mMVPMatrix, 0);
+        	// Combine the rotation matrix with the projection and camera view
+        	Matrix.multiplyMM(mMVPMatrix, 0, mRotationMatrix, 0, mMVPMatrix, 0);
 
-        // Draw triangle
-        //mTriangle.draw(mMVPMatrix);
+        	// Draw triangle
+        	mTriangle.draw(mMVPMatrix);
+        }
     }
 
     @Override
@@ -182,7 +188,7 @@ class Triangle {
     private final int vertexStride = COORDS_PER_VERTEX * 4; // 4 bytes per vertex
 
     // Set color with red, green, blue and alpha (opacity) values
-    float color[] = { 0.63671875f, 0.76953125f, 0.22265625f, 1.0f };
+    float color[] = { 1.0f, 0.0f, 0.0f, 0.25f };
 
     public Triangle() {
         // initialize vertex byte buffer for shape coordinates

@@ -17,40 +17,93 @@
 package com.example.android.opengl;
 
 import android.app.Activity;
-import android.content.Context;
 import android.opengl.GLSurfaceView;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.MotionEvent;
+import android.view.View;
+import android.view.View.OnTouchListener;
+import android.widget.Button;
 
 public class OpenGLES20Complete extends Activity {
 
-    private GLSurfaceView mGLView;
+    protected static final String TAG = "GLES20Complete";
+	private GLSurfaceView mGLView;
+    private MyGLRenderer mRenderer;
+    
+    private float mPreviousX;
+    private float mPreviousY;
+    private final float TOUCH_SCALE_FACTOR = 180.0f / 320;
 
+    
+    private OnTouchListener mTouchListener = new OnTouchListener() {
+
+		@Override
+		public boolean onTouch(View v, MotionEvent e) {
+	        // MotionEvent reports input details from the touch screen
+	        // and other input controls. In this case, you are only
+	        // interested in events where the touch position changed.
+
+	        float x = e.getX();
+	        float y = e.getY();
+
+	        switch (e.getAction()) {
+	            case MotionEvent.ACTION_MOVE:
+
+	                float dx = x - mPreviousX;
+	                float dy = y - mPreviousY;
+//	                Log.d(TAG, "Touch x:" +x + " y:" +y + " dx:" + dx + " dy:" +dy);
+
+	                // reverse direction of rotation above the mid-line
+	                if (y > v.getHeight() / 2) {
+	                  dx = dx * -1 ;
+	                }
+
+	                // reverse direction of rotation to left of the mid-line
+	                if (x < v.getWidth() / 2) {
+	                  dy = dy * -1 ;
+	                }
+
+	                mRenderer.mAngle += (dx + dy) * TOUCH_SCALE_FACTOR;  // = 180.0f / 320
+	                ((GLSurfaceView) v).requestRender();
+	        }
+
+	        mPreviousX = x;
+	        mPreviousY = y;
+	        return true;
+		}
+    };
+    
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Create a GLSurfaceView instance and set it
-        // as the ContentView for this Activity
-//        mGLView = new MyGLSurfaceView(this);
-        // Malc Debug
-//        mGLView.setDebugFlags(GLSurfaceView.DEBUG_CHECK_GL_ERROR | GLSurfaceView.DEBUG_LOG_GL_CALLS);
-//        setContentView(mGLView);
+
         setContentView(R.layout.main);
         
         GLSurfaceView mGLView = (GLSurfaceView) this.findViewById(R.id.glSurface);
         if (mGLView != null)
         {
         	mGLView.setEGLContextClientVersion(2);
-            mGLView.setRenderer(new MyGLRenderer());
-            mGLView.setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
-        }
+        	mGLView.setEGLConfigChooser(8, 8, 8, 8, 0, 0); // RGBA_8888 no depth/stencil buffer
+        	
+        	// Malc Debug
+//          mGLView.setDebugFlags(GLSurfaceView.DEBUG_CHECK_GL_ERROR | GLSurfaceView.DEBUG_LOG_GL_CALLS);
 
-        //this.addContentView(mGLView, null);
-        
-//*/
-        
+        	mRenderer = new MyGLRenderer();
+            mGLView.setRenderer(mRenderer);
+            mGLView.setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
+            mGLView.setOnTouchListener(mTouchListener);
+                                   
+    		((Button) this.findViewById(R.id.leftButton)).setOnClickListener(new View.OnClickListener() {
+    			public void onClick(View v) {
+    				mRenderer.drawTriangle = ! mRenderer.drawTriangle;
+    			}
+    		});       
+        }
+       
     }
+
 
     @Override
     protected void onPause() {
@@ -75,7 +128,7 @@ public class OpenGLES20Complete extends Activity {
         }
     }
 }
-
+/*
 class MyGLSurfaceView extends GLSurfaceView {
 
     private final MyGLRenderer mRenderer;
@@ -90,10 +143,6 @@ class MyGLSurfaceView extends GLSurfaceView {
         mRenderer = new MyGLRenderer();
         setRenderer(mRenderer);
 
-        // Render the view only when there is a change in the drawing data
-        
-        // Malc - We have time based anims... this isn't a plan...
-        //setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY);
     }
 
     private final float TOUCH_SCALE_FACTOR = 180.0f / 320;
@@ -136,3 +185,4 @@ class MyGLSurfaceView extends GLSurfaceView {
     
     
 }
+*/
