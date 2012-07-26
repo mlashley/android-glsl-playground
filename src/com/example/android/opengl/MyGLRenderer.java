@@ -35,16 +35,102 @@ public class MyGLRenderer implements GLSurfaceView.Renderer {
 
     private static final String TAG = "MyGLRenderer";
     private Triangle mTriangle;
-    private Square   mSquare;
+    private volatile Square mSquare; // Declare as synchronized to avoid setShader clobbering it whilst drawing
 
     private final float[] mMVPMatrix = new float[16];
     private final float[] mProjMatrix = new float[16];
     private final float[] mVMatrix = new float[16];
     private final float[] mRotationMatrix = new float[16];
-
+    
     // Declare as volatile because we are updating it from another thread
     public volatile float mAngle;
     public boolean drawTriangle;
+    
+    public static final Shader[] mShaders = new Shader[8];
+    public static int currentShader = 1;
+    
+    public static final String vertexShaderCode =
+            // This matrix member variable provides a hook to manipulate
+            // the coordinates of the objects that use this vertex shader
+            "uniform mat4 uMVPMatrix;" +
+
+            "attribute vec4 vPosition;" +
+            "void main() {" +
+            // the matrix must be included as a modifier of gl_Position
+            "  gl_Position = vPosition * uMVPMatrix;" +
+            "}";
+    
+    private final String fragmentShaderCodeBasic =
+            "precision mediump float;" +
+            "uniform vec4 vColor;" +
+            "void main() {" +
+            "  gl_FragColor = vColor;" +
+            "}";
+    
+    private final String fragmentShaderCodeGrey =
+            "precision mediump float;" +
+            "uniform vec4 vColor;" +
+            "void main() {" +
+            "  gl_FragColor = vec4(0.6,0.6,0.6,0.6);" +
+            "}";
+        
+
+    private final String fragmentShaderCodeFun = 
+   "	precision mediump float; "+
+
+"    uniform float time;" +
+"uniform vec4 vColor;" +
+//"    uniform vec2 mouse; "+
+//"    uniform vec2 resolution;  "+
+
+"void main (void) { "+
+
+"        vec2 position = gl_FragCoord.xy / vec2(1280.0,800.0); "+ // resolution.xy; "+
+
+"        float t = mod(time/1.0,1.); " +
+"        float t4 = mod(time/4.0,1.); " + 
+
+"        float c1,c2,c3;" +
+"        c1 = t/2.0; "+
+"        c2 = mod(position.y,0.1111)/0.1111; "+
+"        c3 = mod(position.x,0.0625)/0.0625; "+
+
+"        float a = sin(39.14*distance(position.xy,vec2(t4,t4))); "+ 
+
+"        if( mod(time,2.0) <= 1.0) { "+
+"                gl_FragColor = vec4(c1,c2,a,a); "+
+"        } else { "+
+"                gl_FragColor = vec4(c2,c1,c3,a); "+
+"        } "+
+"}";
+
+    private final String fragmentShaderCodeLeds =
+"precision mediump float; "+
+
+"uniform float time;" +
+"uniform vec4 vColor;" +
+
+"void main (void) { " +
+"    vec2 v = gl_FragCoord.xy / vec2(1280.0,800.0); " +
+"    float w, x, z = 0.0; " +
+"    vec2 u; " +
+"    vec3 c; " +
+"    v *= 10.0; " +
+"    u = floor(v) * 0.1 + vec2(20.0, 11.0); " +
+"    u = u * u; " +
+"    x = fract(u.x * u.y * 9.1 + time); " +
+"    x *= (1.0 - length(fract(v) - vec2(0.5, 0.5)) * (2.0 + x)); " +
+"    c = vec3(v * x, x); " +
+"    gl_FragColor = vec4(c,1.0); " +
+"}";
+
+      
+    public void setVariableShader(int i) {
+    	currentShader++ ;
+    	if(currentShader > 3) { 
+    		currentShader = 0 ;
+    	};
+  	}
     
     @Override
     public void onSurfaceCreated(GL10 unused, EGLConfig config) {
@@ -55,7 +141,11 @@ public class MyGLRenderer implements GLSurfaceView.Renderer {
         // Enable Alpha/Blending (see also setEGLConfigChooser on the GLSurfaceView
         GLES20.glEnable(GLES20.GL_BLEND);
         GLES20.glBlendFunc(GLES20.GL_ONE, GLES20.GL_ONE_MINUS_SRC_ALPHA);
-
+        
+        mShaders[0] = new Shader(vertexShaderCode, fragmentShaderCodeBasic);
+        mShaders[1] = new Shader(vertexShaderCode, fragmentShaderCodeFun);
+        mShaders[2] = new Shader(vertexShaderCode, fragmentShaderCodeGrey);
+        mShaders[3] = new Shader(vertexShaderCode, fragmentShaderCodeLeds);
         mTriangle = new Triangle();
         mSquare   = new Square();
     }
@@ -75,9 +165,9 @@ public class MyGLRenderer implements GLSurfaceView.Renderer {
         // Draw square
         
         long time = SystemClock.uptimeMillis() % 16000L;
-        float angle = 0.001f * ((int) time);
-        mSquare.draw(mMVPMatrix,angle);
-
+        float seconds = 0.001f * ((int) time);
+        mSquare.draw(mMVPMatrix,seconds);
+        
         // Create a rotation for the triangle
 //        long time = SystemClock.uptimeMillis() % 4000L;
 //        float angle = 0.090f * ((int) time);
@@ -109,27 +199,6 @@ public class MyGLRenderer implements GLSurfaceView.Renderer {
 
     }
 
-    public static int loadShader(int type, String shaderCode){
-
-        // create a vertex shader type (GLES20.GL_VERTEX_SHADER)
-        // or a fragment shader type (GLES20.GL_FRAGMENT_SHADER)
-        int shader = GLES20.glCreateShader(type);
-
-        // add the source code to the shader and compile it
-        GLES20.glShaderSource(shader, shaderCode);
-        GLES20.glCompileShader(shader);
-        int[] compiled = new int[1];
-        GLES20.glGetShaderiv(shader, GLES20.GL_COMPILE_STATUS, compiled, 0);
-        if (compiled[0] == 0) {
-            Log.e(TAG, "Could not compile shader " + type + ":");
-            Log.e(TAG, GLES20.glGetShaderInfoLog(shader));
-            GLES20.glDeleteShader(shader);
-            shader = 0;
-        }
-
-        return shader;
-    }
-
     /**
      * Utility method for debugging OpenGL calls. Provide the name of the call
      * just after making it:
@@ -151,32 +220,72 @@ public class MyGLRenderer implements GLSurfaceView.Renderer {
     }
 }
 
-class Triangle {
+class Shader {
+    public int mProgram;
+    private int fShaderId;
+    private int vShaderId;
 
-    private final String vertexShaderCode =
-        // This matrix member variable provides a hook to manipulate
-        // the coordinates of the objects that use this vertex shader
-        "uniform mat4 uMVPMatrix;" +
+    private final static String TAG = "Shader";
 
-        "attribute vec4 vPosition;" +
-        "void main() {" +
-        // the matrix must be included as a modifier of gl_Position
-        "  gl_Position = vPosition * uMVPMatrix;" +
-        "}";
+    public Shader (String vertexShaderCode, String fragmentShaderCode) {
+        // prepare shaders and OpenGL program
+        vShaderId = loadShader(GLES20.GL_VERTEX_SHADER,
+                                                   vertexShaderCode);
+        MyGLRenderer.checkGlError("loadShader vertex");
+        fShaderId = loadShader(GLES20.GL_FRAGMENT_SHADER,
+                                                     fragmentShaderCode);
+        MyGLRenderer.checkGlError("loadShader fragment");
 
-    private final String fragmentShaderCode =
-        "precision mediump float;" +
-        "uniform vec4 vColor;" +
-        "void main() {" +
-        "  gl_FragColor = vColor;" +
-        "}";
+        mProgram = GLES20.glCreateProgram();             // create empty OpenGL Program
+        GLES20.glAttachShader(mProgram, vShaderId);   // add the vertex shader to program
+        MyGLRenderer.checkGlError("glAttachShader vertex");
+        GLES20.glAttachShader(mProgram, fShaderId); // add the fragment shader to program
+        MyGLRenderer.checkGlError("glAttachShader fragment");
+        Log.e(TAG,"Attached Shader: " + fShaderId);
+        GLES20.glLinkProgram(mProgram);                  // create OpenGL program executables
+        int[] linkStatus = new int[1];
+        GLES20.glGetProgramiv(mProgram, GLES20.GL_LINK_STATUS, linkStatus, 0);
+        if (linkStatus[0] != GLES20.GL_TRUE) {
+        	Log.e(TAG, "Could not link program: ");
+            Log.e(TAG, GLES20.glGetProgramInfoLog(mProgram));
+            GLES20.glDeleteProgram(mProgram);
+        }
+    }
+    
+    public static int loadShader(int type, String shaderCode){
+
+        // create a vertex shader type (GLES20.GL_VERTEX_SHADER)
+        // or a fragment shader type (GLES20.GL_FRAGMENT_SHADER)
+        int shader = GLES20.glCreateShader(type);
+
+        // add the source code to the shader and compile it
+        GLES20.glShaderSource(shader, shaderCode);
+        GLES20.glCompileShader(shader);
+        int[] compiled = new int[1];
+        GLES20.glGetShaderiv(shader, GLES20.GL_COMPILE_STATUS, compiled, 0);
+        if (compiled[0] == 0) {
+            Log.e(TAG, "Could not compile shader " + type + ":");
+            Log.e(TAG, GLES20.glGetShaderInfoLog(shader));
+            GLES20.glDeleteShader(shader);
+            shader = 0;
+        }
+
+        return shader;
+    }
+}
+
+
+class Triangle {  
+
 
     private final FloatBuffer vertexBuffer;
-    private final int mProgram;
-    private int mPositionHandle;
-    private int mColorHandle;
+    private final String TAG = "MyGLRenderer::Triangle";
+    private Shader s;
+    private int mPositionHandle; // These should really be private with getters...
+    private int mTimeHandle;
     private int mMVPMatrixHandle;
-
+    private int mColorHandle;
+    
     // number of coordinates per vertex in this array
     static final int COORDS_PER_VERTEX = 3;
     static float triangleCoords[] = { // in counterclockwise order:
@@ -204,26 +313,32 @@ class Triangle {
         vertexBuffer.put(triangleCoords);
         // set the buffer to read the first coordinate
         vertexBuffer.position(0);
-
-        // prepare shaders and OpenGL program
-        int vertexShader = MyGLRenderer.loadShader(GLES20.GL_VERTEX_SHADER,
-                                                   vertexShaderCode);
-        int fragmentShader = MyGLRenderer.loadShader(GLES20.GL_FRAGMENT_SHADER,
-                                                     fragmentShaderCode);
-
-        mProgram = GLES20.glCreateProgram();             // create empty OpenGL Program
-        GLES20.glAttachShader(mProgram, vertexShader);   // add the vertex shader to program
-        GLES20.glAttachShader(mProgram, fragmentShader); // add the fragment shader to program
-        GLES20.glLinkProgram(mProgram);                  // create OpenGL program executables
-
+                
     }
 
     public void draw(float[] mvpMatrix) {
+    	
+    	s = MyGLRenderer.mShaders[0];
+    	int mProgram = s.mProgram;
+    	
         // Add program to OpenGL environment
         GLES20.glUseProgram(mProgram);
-
+        
         // get handle to vertex shader's vPosition member
         mPositionHandle = GLES20.glGetAttribLocation(mProgram, "vPosition");
+        MyGLRenderer.checkGlError("glGetUniformLocation vPosition");
+
+        // get handle to fragment shader's vColor member
+        mTimeHandle = GLES20.glGetUniformLocation(mProgram, "time");
+        MyGLRenderer.checkGlError("glGetUniformLocation time");
+        
+        // get handle to shape's transformation matrix
+        mMVPMatrixHandle = GLES20.glGetUniformLocation(mProgram, "uMVPMatrix");
+        MyGLRenderer.checkGlError("glGetUniformLocation uMVPMatrix");
+        
+        // get handle to fragment shader's vColor member
+        mColorHandle = GLES20.glGetUniformLocation(mProgram, "vColor");
+        MyGLRenderer.checkGlError("glGetUniformLocation mColor");
 
         // Enable a handle to the triangle vertices
         GLES20.glEnableVertexAttribArray(mPositionHandle);
@@ -233,15 +348,8 @@ class Triangle {
                                      GLES20.GL_FLOAT, false,
                                      vertexStride, vertexBuffer);
 
-        // get handle to fragment shader's vColor member
-        mColorHandle = GLES20.glGetUniformLocation(mProgram, "vColor");
-
         // Set color for drawing the triangle
         GLES20.glUniform4fv(mColorHandle, 1, color, 0);
-
-        // get handle to shape's transformation matrix
-        mMVPMatrixHandle = GLES20.glGetUniformLocation(mProgram, "uMVPMatrix");
-        MyGLRenderer.checkGlError("glGetUniformLocation");
 
         // Apply the projection and view transformation
         GLES20.glUniformMatrix4fv(mMVPMatrixHandle, 1, false, mvpMatrix, 0);
@@ -255,63 +363,30 @@ class Triangle {
     }
 }
 
+
+
 class Square {
 
-    private final String vertexShaderCode =
-        // This matrix member variable provides a hook to manipulate
-        // the coordinates of the objects that use this vertex shader
-        "uniform mat4 uMVPMatrix;" +
-
-        "attribute vec4 vPosition;" +
-        "void main() {" +
-        // the matrix must be included as a modifier of gl_Positionc3
-        "  gl_Position = vPosition * uMVPMatrix;" +
-        "}";
-
-//    private final String fragmentShaderCode =
+	//    private final String fragmentShaderCode =
 //       "precision mediump float;" +
 //        "uniform vec4 vColor;" +
 //        "void main() {" +
 //        "  vec4 a = vColor;" +
 //        "  gl_FragColor = vec4(sin(gl_FragCoord.xy), 0.0, 0.0); " +
 //        "}";
-    private final String fragmentShaderCodeMalc = 
-   "	precision mediump float; "+
 
-"    uniform float time;" +
-"uniform vec4 vColor;" +
-//"    uniform vec2 mouse; "+
-//"    uniform vec2 resolution;  "+
-
-"void main (void) { "+
-
-"        vec2 position = gl_FragCoord.xy / vec2(1280.0,800.0); "+ // resolution.xy; "+
-
-"        float t = mod(time/1.0,1.); " +
-"        float t4 = mod(time/4.0,1.); " + 
-
-"        float c1,c2,c3;" +
-"        c1 = t/2.0; "+
-"        c2 = mod(position.y,0.1111)/0.1111; "+
-"        c3 = mod(position.x,0.0625)/0.0625; "+
-
-"        float a = sin(39.14*distance(position.xy,vec2(t4,t4))); "+ 
-
-"        if( mod(time,2.0) <= 1.0) { "+
-"                gl_FragColor = vec4(c1,c2,a,a); "+
-"        } else { "+
-"                gl_FragColor = vec4(c2,c1,c3,a); "+
-"        } "+
-"}";
 
     private final FloatBuffer vertexBuffer;
     private final ShortBuffer drawListBuffer;
-    private final int mProgram;
     private final String TAG = "MyGLRenderer::Square";
-    private int mPositionHandle;
-    private int mColorHandle;
-    private int mMVPMatrixHandle;
 
+    private Shader s;
+    private int mPositionHandle; // These should really be private with getters...
+    private int mTimeHandle;
+    private int mMVPMatrixHandle;
+    private int mColorHandle;
+    
+    
     // number of coordinates per vertex in this array
     static final int COORDS_PER_VERTEX = 3;
     static float squareCoords[] = { -2.0f,  2.0f, 0.0f,   // top left
@@ -344,37 +419,34 @@ class Square {
         drawListBuffer = dlb.asShortBuffer();
         drawListBuffer.put(drawOrder);
         drawListBuffer.position(0);
-
-        // prepare shaders and OpenGL program
-        int vertexShader = MyGLRenderer.loadShader(GLES20.GL_VERTEX_SHADER,
-                                                   vertexShaderCode);
-        MyGLRenderer.checkGlError("loadShader vertex");
-        int fragmentShader = MyGLRenderer.loadShader(GLES20.GL_FRAGMENT_SHADER,
-                                                     fragmentShaderCodeMalc);
-        MyGLRenderer.checkGlError("loadShader fragment");
-
-        mProgram = GLES20.glCreateProgram();             // create empty OpenGL Program
-        GLES20.glAttachShader(mProgram, vertexShader);   // add the vertex shader to program
-        MyGLRenderer.checkGlError("glAttachShader vertex");
-        GLES20.glAttachShader(mProgram, fragmentShader); // add the fragment shader to program
-        MyGLRenderer.checkGlError("glAttachShader fragment");
-        GLES20.glLinkProgram(mProgram);                  // create OpenGL program executables
-        int[] linkStatus = new int[1];
-        GLES20.glGetProgramiv(mProgram, GLES20.GL_LINK_STATUS, linkStatus, 0);
-        if (linkStatus[0] != GLES20.GL_TRUE) {
-        	Log.e(TAG, "Could not link program: ");
-            Log.e(TAG, GLES20.glGetProgramInfoLog(mProgram));
-            GLES20.glDeleteProgram(mProgram);
-        }
+        
     }
 
-    public void draw(float[] mvpMatrix, float mAngle) {
-        // Add program to OpenGL environment
-        GLES20.glUseProgram(mProgram);
-
+    public void draw(float[] mvpMatrix, float time) {
+                	
+        //Log.e(TAG,"In draw Square fShaderId: " + fShaderId + " mProgram: " + mProgram);
+    	
+    	s = MyGLRenderer.mShaders[MyGLRenderer.currentShader];
+    	int mProgram = s.mProgram;
+    	
+    	// Add program to OpenGL environment
+        GLES20.glUseProgram(s.mProgram);
+        
         // get handle to vertex shader's vPosition member
         mPositionHandle = GLES20.glGetAttribLocation(mProgram, "vPosition");
         MyGLRenderer.checkGlError("glGetUniformLocation vPosition");
+
+        // get handle to fragment shader's vColor member
+        mTimeHandle = GLES20.glGetUniformLocation(mProgram, "time");
+        MyGLRenderer.checkGlError("glGetUniformLocation time");
+        
+        // get handle to shape's transformation matrix
+        mMVPMatrixHandle = GLES20.glGetUniformLocation(mProgram, "uMVPMatrix");
+        MyGLRenderer.checkGlError("glGetUniformLocation uMVPMatrix");
+        
+        // get handle to fragment shader's vColor member
+        mColorHandle = GLES20.glGetUniformLocation(mProgram, "vColor");
+        MyGLRenderer.checkGlError("glGetUniformLocation mColor");
 
 
         // Enable a handle to the triangle vertices
@@ -384,22 +456,8 @@ class Square {
         GLES20.glVertexAttribPointer(mPositionHandle, COORDS_PER_VERTEX,
                                      GLES20.GL_FLOAT, false,
                                      vertexStride, vertexBuffer);
-
-        // get handle to fragment shader's vColor member
-        mColorHandle = GLES20.glGetUniformLocation(mProgram, "time");
-        MyGLRenderer.checkGlError("glGetUniformLocation time");
-
-        // Set color for drawing the triangle
         
-     //   float time = (float) System.currentTimeMillis() / (float) 1000.0;
-
-        
-        GLES20.glUniform1f(mColorHandle, mAngle );
-        //GLES20.glUniform4fv(mColorHandle, 1, color, 0);
-
-        // get handle to shape's transformation matrix
-        mMVPMatrixHandle = GLES20.glGetUniformLocation(mProgram, "uMVPMatrix");
-        MyGLRenderer.checkGlError("glGetUniformLocation uMVPMatrix");
+        GLES20.glUniform1f(mTimeHandle, time );
 
         // Apply the projection and view transformation
         GLES20.glUniformMatrix4fv(mMVPMatrixHandle, 1, false, mvpMatrix, 0);
@@ -411,5 +469,6 @@ class Square {
 
         // Disable vertex array
         GLES20.glDisableVertexAttribArray(mPositionHandle);
+        
     }
 }

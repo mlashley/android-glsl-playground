@@ -20,5 +20,6 @@
     <string name="code">This is where the code goes</string>
     <string name="leftButtonLabel">left</string>
     <string name="rightButtonLabel">right</string>
+    <string name="centreButtonLabel">Pause</string>
 
 </resources>

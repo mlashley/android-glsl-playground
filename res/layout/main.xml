@@ -50,6 +50,10 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content" android:gravity="center"
             android:layout_gravity="left" />
+        <Button android:id="@+id/centreButton" android:text="@+string/centreButtonLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" android:gravity="center"
+            android:layout_gravity="center_horizontal" />
         <Button android:id="@+id/rightButton" android:text="@+string/rightButtonLabel"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content" android:gravity="center"

@@ -34,8 +34,7 @@ public class OpenGLES20Complete extends Activity {
     private float mPreviousX;
     private float mPreviousY;
     private final float TOUCH_SCALE_FACTOR = 180.0f / 320;
-
-    
+        
     private OnTouchListener mTouchListener = new OnTouchListener() {
 
 		@Override
@@ -81,14 +80,14 @@ public class OpenGLES20Complete extends Activity {
 
         setContentView(R.layout.main);
         
-        GLSurfaceView mGLView = (GLSurfaceView) this.findViewById(R.id.glSurface);
+        mGLView = (GLSurfaceView) this.findViewById(R.id.glSurface);
         if (mGLView != null)
         {
         	mGLView.setEGLContextClientVersion(2);
         	mGLView.setEGLConfigChooser(8, 8, 8, 8, 0, 0); // RGBA_8888 no depth/stencil buffer
         	
         	// Malc Debug
-//          mGLView.setDebugFlags(GLSurfaceView.DEBUG_CHECK_GL_ERROR | GLSurfaceView.DEBUG_LOG_GL_CALLS);
+          mGLView.setDebugFlags(GLSurfaceView.DEBUG_CHECK_GL_ERROR | GLSurfaceView.DEBUG_LOG_GL_CALLS);
 
         	mRenderer = new MyGLRenderer();
             mGLView.setRenderer(mRenderer);
@@ -99,7 +98,31 @@ public class OpenGLES20Complete extends Activity {
     			public void onClick(View v) {
     				mRenderer.drawTriangle = ! mRenderer.drawTriangle;
     			}
-    		});       
+    		});
+    		
+    		((Button) this.findViewById(R.id.centreButton)).setOnClickListener(new View.OnClickListener() {
+    			public void onClick(View v) {
+    				Button b = (Button) v;
+    				if(b.getText().toString().equals("Pause")) {
+    					b.setText("Resume");
+    					mGLView.setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY);
+    				} else if(b.getText().toString().equals("Resume")) {
+    					b.setText("Pause");
+    					mGLView.setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
+    				}  
+    				
+    				
+    			}
+    		});
+    		
+    		((Button) this.findViewById(R.id.rightButton)).setOnClickListener(new View.OnClickListener() {
+    			public void onClick(View v) {
+    				mRenderer.setVariableShader(2);
+    		        mGLView = (GLSurfaceView) findViewById(R.id.glSurface);
+    				mGLView.requestRender();
+    			}
+    		});
+    		
         }
        
     }
